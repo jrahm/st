@@ -142,6 +142,7 @@ static void sendbreak(const Arg *);
 /* config.h for applying patches and the configuration. */
 #include "config.h"
 
+static void setfont(const char *);
 static void execsh(void);
 static void stty(void);
 static void sigchld(int);
@@ -1901,6 +1902,10 @@ strhandle(void)
 				redraw();
 			}
 			return;
+		/* Set the font. This mimicks the behavior of urxvt. */
+		case 710:
+			setfont(strescseq.args[1]);
+			return;
 		}
 		break;
 	case 'k': /* old title set compatibility */
@@ -2579,6 +2584,17 @@ tresize(int col, int row)
 	term.c = c;
 }
 
+void
+setfont(const char* fontname) {
+	free(usedfont);
+	usedfont = strdup(fontname);
+	xunloadfonts();
+	xloadfonts(usedfont, 15);
+	cresize(0, 0);
+	ttyresize();
+	redraw();
+	xhints();
+}
 void
 zoom(const Arg *arg)
 {

@@ -885,7 +885,7 @@ xinit(void)
 	if (!FcInit())
 		die("Could not init fontconfig.\n");
 
-	usedfont = (opt_font == NULL)? font : opt_font;
+	usedfont = strdup((opt_font == NULL)? font : opt_font);
 	xloadfonts(usedfont, 0);
 
 	/* colors */
