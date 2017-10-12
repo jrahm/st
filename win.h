@@ -28,3 +28,5 @@ void xresize(int, int);
 void xselpaste(void);
 unsigned long xwinid(void);
 void xsetsel(char *, Time);
+void xsquishtextv(float amt);
+void xsquishtexth(float amt);

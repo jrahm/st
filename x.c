@@ -1768,3 +1768,23 @@ run:
 
 	return 0;
 }
+
+void xsquishtextv(float amt) {
+  chscale += amt / (float) dc.font.height;
+  xunloadfonts();
+  xloadfonts(usedfont, usedfontsize);
+  cresize(0, 0);
+  ttyresize();
+  redraw();
+  xhints();
+}
+
+void xsquishtexth(float amt) {
+  cwscale += amt / (float) dc.font.width;
+  xunloadfonts();
+  xloadfonts(usedfont, usedfontsize);
+  cresize(0, 0);
+  ttyresize();
+  redraw();
+  xhints();
+}

@@ -138,6 +138,8 @@ static void printscreen(const Arg *) ;
 static void iso14755(const Arg *);
 static void toggleprinter(const Arg *);
 static void sendbreak(const Arg *);
+static void squishtextv(const Arg *);
+static void squishtexth(const Arg *);
 
 /* config.h for applying patches and the configuration. */
 #include "config.h"
@@ -2602,6 +2604,16 @@ zoom(const Arg *arg)
 
 	larg.f = usedfontsize + arg->f;
 	zoomabs(&larg);
+}
+
+void
+squishtexth(const Arg* arg) {
+	xsquishtexth(arg->f);
+}
+
+void
+squishtextv(const Arg *arg) {
+	xsquishtextv(arg->f);
 }
 
 void
