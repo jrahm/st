@@ -1382,7 +1382,14 @@ tsetattr(int *attr, int l)
 				ATTR_BLINK      |
 				ATTR_REVERSE    |
 				ATTR_INVISIBLE  |
-				ATTR_STRUCK     );
+				ATTR_STRUCK     |
+
+				/* Custom attributes. */
+				ATTR_UNDERCURL  |
+				ATTR_STRUCK     |
+				ATTR_VSTRIKE    |
+				ATTR_OVERLINE   );
+			term.c.attr.sp = -1;
 			term.c.attr.fg = defaultfg;
 			term.c.attr.bg = defaultbg;
 			break;
@@ -1447,6 +1454,37 @@ tsetattr(int *attr, int l)
 		case 49:
 			term.c.attr.bg = defaultbg;
 			break;
+
+		/* Custom features. */
+    case 53:
+      term.c.attr.mode |= ATTR_OVERLINE;
+      break;
+    case 55:
+      term.c.attr.mode &= ~ATTR_OVERLINE;
+      break;
+    case 81:
+      term.c.attr.mode |= ATTR_UNDERCURL;
+      break;
+    case 82:
+      term.c.attr.mode &= ~ATTR_UNDERCURL;
+      break;
+    case 83:
+      term.c.attr.mode |= ATTR_VSTRIKE;
+      break;
+    case 84:
+      term.c.attr.mode &= ~ATTR_VSTRIKE;
+      break;
+		case 88:
+			/* Set the "special" color */
+      if ((idx = tdefcolor(attr, &i, l)) >= 0) {
+         term.c.attr.sp = idx;
+      }
+      break;
+    case 89:
+			/* Unset the "special" color */
+      term.c.attr.sp = -1;
+      break;
+
 		default:
 			if (BETWEEN(attr[i], 30, 37)) {
 				term.c.attr.fg = attr[i] - 30;

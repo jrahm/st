@@ -1,4 +1,6 @@
 /* See LICENSE for license details. */
+
+#include <math.h>
 #include <errno.h>
 #include <locale.h>
 #include <signal.h>
@@ -1121,11 +1123,13 @@ xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len, int x
 void
 xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, int y)
 {
+  double w, dx, h;
+  int i, dy;
 	int charlen = len * ((base.mode & ATTR_WIDE) ? 2 : 1);
 	int winx = borderpx + x * win.cw, winy = borderpx + y * win.ch,
 	    width = charlen * win.cw;
-	Color *fg, *bg, *temp, revfg, revbg, truefg, truebg;
-	XRenderColor colfg, colbg;
+	Color *fg, *bg, *sp, *temp, revfg, revbg, truefg, truebg, truesp;
+	XRenderColor colfg, colbg, colsp;
 	XRectangle r;
 
 	/* Fallback on color display for attributes not supported by the font */
@@ -1246,6 +1250,74 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
 		XftDrawRect(xw.draw, fg, winx, winy + 2 * dc.font.ascent / 3,
 				width, 1);
 	}
+
+  /* Draw custom attributes. */
+
+  /* Set the special color. */
+  if (base.sp != -1) {
+    if (IS_TRUECOL(base.sp)) {
+      colsp.alpha = 0xffff;
+      colsp.green = TRUEGREEN(base.sp);
+      colsp.red = TRUERED(base.sp);
+      colsp.blue = TRUEBLUE(base.sp);
+      XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &colsp, &truesp);
+      sp = &truesp;
+    } else {
+      sp = fg;
+    }
+  } else {
+    sp = fg;
+  }
+
+  /* Undercurl. */
+  if (base.mode & ATTR_UNDERCURL) {
+    for (i = 0; i < width; ++ i)  {
+      w = dc.font.width;
+      dx = ((double) ((i * 512) % (dc.font.width * 256))) / 256.0;
+      h = dc.font.descent / 2.0;
+      dy = round((1 - abs(w - 2 * dx) / w) * h);
+
+      XftDrawRect(
+          xw.draw,
+          sp,
+          winx + i,
+          winy + 1 + dc.font.ascent + dy,
+          1,
+          1);
+
+      XftDrawRect(
+          xw.draw,
+          sp,
+          winx + i,
+          winy + 1 + dc.font.ascent - 1 + dy,
+          1,
+          1);
+    }
+  }
+
+  /* Line above characters. */
+  if (base.mode & ATTR_OVERLINE) {
+    XftDrawRect(
+        xw.draw,
+        sp,
+        winx,
+        winy + dc.font.descent,
+        width,
+        1);
+  }
+
+  /* Vertical strike over each character. */
+  if (base.mode & ATTR_VSTRIKE) {
+    for(i = dc.font.width / 2; i < width; i += dc.font.width) {
+      XftDrawRect(
+          xw.draw,
+          sp,
+          winx + i,
+          winy,
+          1,
+          dc.font.height);
+    }
+  }
 
 	/* Reset clip to none. */
 	XftDrawSetClip(xw.draw, 0);
