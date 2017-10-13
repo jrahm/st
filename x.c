@@ -1163,6 +1163,22 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
 		bg = &dc.col[base.bg];
 	}
 
+  /* Set the special color. */
+  if (base.sp != -1) {
+    if (IS_TRUECOL(base.sp)) {
+      colsp.alpha = 0xffff;
+      colsp.green = TRUEGREEN(base.sp);
+      colsp.red = TRUERED(base.sp);
+      colsp.blue = TRUEBLUE(base.sp);
+      XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &colsp, &truesp);
+      sp = &truesp;
+    } else {
+      sp = &dc.col[base.sp];
+    }
+  } else {
+    sp = fg;
+  }
+
 	/* Change basic system colors [0-7] to bright system colors [8-15] */
 	if ((base.mode & ATTR_BOLD_FAINT) == ATTR_BOLD && BETWEEN(base.fg, 0, 7))
 		fg = &dc.col[base.fg + 8];
@@ -1242,32 +1258,16 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
 
 	/* Render underline and strikethrough. */
 	if (base.mode & ATTR_UNDERLINE) {
-		XftDrawRect(xw.draw, fg, winx, winy + dc.font.ascent + 1,
+		XftDrawRect(xw.draw, sp, winx, winy + dc.font.ascent + 1,
 				width, 1);
 	}
 
 	if (base.mode & ATTR_STRUCK) {
-		XftDrawRect(xw.draw, fg, winx, winy + 2 * dc.font.ascent / 3,
+		XftDrawRect(xw.draw, sp, winx, winy + 2 * dc.font.ascent / 3,
 				width, 1);
 	}
 
   /* Draw custom attributes. */
-
-  /* Set the special color. */
-  if (base.sp != -1) {
-    if (IS_TRUECOL(base.sp)) {
-      colsp.alpha = 0xffff;
-      colsp.green = TRUEGREEN(base.sp);
-      colsp.red = TRUERED(base.sp);
-      colsp.blue = TRUEBLUE(base.sp);
-      XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &colsp, &truesp);
-      sp = &truesp;
-    } else {
-      sp = fg;
-    }
-  } else {
-    sp = fg;
-  }
 
   /* Undercurl. */
   if (base.mode & ATTR_UNDERCURL) {
