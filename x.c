@@ -1338,7 +1338,16 @@ xdrawcursor(void)
 {
 	static int oldx = 0, oldy = 0;
 	int curx;
-	Glyph g = {' ', ATTR_NULL, defaultbg, defaultcs}, og;
+	Glyph g = {
+    .u = ' ',
+    .mode = ATTR_NULL,
+    .fg = defaultbg,
+    .bg = defaultcs,
+    .sp = -1
+  };
+
+  Glyph og;
+
 	int ena_sel = sel.ob.x != -1 && sel.alt == IS_SET(MODE_ALTSCREEN);
 	Color drawcol;
 
@@ -1386,6 +1395,7 @@ xdrawcursor(void)
 		}
 	}
 
+  g.sp = g.fg;
 	if (IS_SET(MODE_HIDE))
 		return;
 

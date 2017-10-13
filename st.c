@@ -1020,11 +1020,17 @@ treset(void)
 {
 	uint i;
 
-	term.c = (TCursor){{
-		.mode = ATTR_NULL,
-		.fg = defaultfg,
-		.bg = defaultbg
-	}, .x = 0, .y = 0, .state = CURSOR_DEFAULT};
+	term.c = (TCursor){
+    .attr = {
+		  .mode = ATTR_NULL,
+		  .fg = defaultfg,
+		  .bg = defaultbg,
+		  .sp = -1,
+	  },
+    .x = 0,
+    .y = 0,
+    .state = CURSOR_DEFAULT
+  };
 
 	memset(term.tabs, 0, term.col * sizeof(*term.tabs));
 	for (i = tabspaces; i < term.col; i += tabspaces)
@@ -1046,7 +1052,16 @@ treset(void)
 void
 tnew(int col, int row)
 {
-	term = (Term){ .c = { .attr = { .fg = defaultfg, .bg = defaultbg } } };
+	term = (Term){
+    .c = {
+      .attr = {
+        .fg = defaultfg,
+        .bg = defaultbg,
+        .sp = -1
+      }
+    }
+  };
+
 	tresize(col, row);
 	term.numlock = 1;
 
@@ -1261,6 +1276,7 @@ tclearregion(int x1, int y1, int x2, int y2)
 				selclear();
 			gp->fg = term.c.attr.fg;
 			gp->bg = term.c.attr.bg;
+			gp->sp = term.c.attr.sp;
 			gp->mode = 0;
 			gp->u = ' ';
 		}
