@@ -47,6 +47,7 @@ typedef struct {
 	XIM xim;
 	XIC xic;
 	Draw draw;
+	Draw wdraw;
 	Visual *vis;
 	XSetWindowAttributes attrs;
 	int scr;
@@ -930,6 +931,9 @@ xinit(void)
 	/* Xft rendering context */
 	xw.draw = XftDrawCreate(xw.dpy, xw.buf, xw.vis, xw.cmap);
 
+  /* Xft rendering context for the window itself */
+	xw.wdraw = XftDrawCreate(xw.dpy, xw.win, xw.vis, xw.cmap);
+
 	/* input methods */
 	if ((xw.xim = XOpenIM(xw.dpy, NULL, NULL, NULL)) == NULL) {
 		XSetLocaleModifiers("@im=local");
@@ -1468,12 +1472,63 @@ xsettitle(char *p)
 	XFree(prop.value);
 }
 
+static XRenderColor crosshairs = {
+  .alpha = 0x0,
+  .red = 0x8000,
+  .blue = 0x5000,
+  .green = 0x5000
+};
+static Color* truecrosshairs = NULL;
+
 void
 draw(void)
 {
+  static int thing = 1;
+
 	drawregion(0, 0, term.col, term.row);
 	XCopyArea(xw.dpy, xw.buf, xw.win, dc.gc, 0, 0, win.w,
 			win.h, 0, 0);
+
+  /* Drow crosshairs for the cursor. */
+  if (!IS_SET(MODE_HIDE)) {
+    if (!truecrosshairs) {
+      truecrosshairs = malloc(sizeof(Color));
+      XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &crosshairs, truecrosshairs);
+    }
+
+    XftDrawRect( /* North */
+        xw.wdraw,
+        truecrosshairs,
+        term.c.x * win.cw + cursorthickness + (win.cw / 2),
+        0,
+        1,
+        (term.c.y - 1) * win.ch);
+
+    XftDrawRect( /* South */
+        xw.wdraw,
+        truecrosshairs,
+        term.c.x * win.cw + cursorthickness + (win.cw / 2),
+        (term.c.y + 2) * win.ch,
+        1,
+        (term.row - term.c.y) * win.ch);
+
+    XftDrawRect( /* East. */
+        xw.wdraw,
+        truecrosshairs,
+        (term.c.x + 2) * win.cw + cursorthickness,
+        term.c.y * win.ch + cursorthickness + (win.ch / 2),
+        (term.col - term.c.x + 2) * win.cw,
+        1);
+
+    // XftDrawRect( /* West. */
+    //     xw.wdraw,
+    //     truecrosshairs,
+    //     0,
+    //     term.c.y * win.ch + cursorthickness + (win.ch / 2),
+    //     (term.c.x - 1) * win.cw,
+    //     1);
+  }
+
 	XSetForeground(xw.dpy, dc.gc,
 			dc.col[IS_SET(MODE_REVERSE)?
 				defaultfg : defaultbg].pixel);
