@@ -1,5 +1,7 @@
 /* See LICENSE for license details. */
 
+#define USE_ARGB 1
+
 #include <math.h>
 #include <errno.h>
 #include <locale.h>
@@ -52,6 +54,7 @@ typedef struct {
 	XSetWindowAttributes attrs;
 	int scr;
 	int isfixed; /* is fixed geometry? */
+  int depth; /* bit depth */
 	int l, t; /* left and top offset */
 	int gm; /* geometry mask */
 } XWindow;
@@ -564,8 +567,7 @@ xresize(int col, int row)
 	win.th = MAX(1, row * win.ch);
 
 	XFreePixmap(xw.dpy, xw.buf);
-	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h,
-			DefaultDepth(xw.dpy, xw.scr));
+	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h, xw.depth);
 	XftDrawChange(xw.draw, xw.buf);
 	xclear(0, 0, win.w, win.h);
 }
@@ -622,6 +624,13 @@ xloadcols(void)
 			else
 				die("Could not allocate color %d\n", i);
 		}
+
+  if (USE_ARGB) {
+    int alpha = 0x80;
+    dc.col[defaultbg].color.alpha = (0xffff * alpha) / 0xff;
+    dc.col[defaultbg].pixel &= 0x00111111;
+    dc.col[defaultbg].pixel |= alpha << 24;
+  }
 	loaded = 1;
 }
 
@@ -882,7 +891,47 @@ xinit(void)
 	if (!(xw.dpy = XOpenDisplay(NULL)))
 		die("Can't open display\n");
 	xw.scr = XDefaultScreen(xw.dpy);
-	xw.vis = XDefaultVisual(xw.dpy, xw.scr);
+
+  xw.depth = (USE_ARGB) ? 32 : XDefaultDepth(xw.dpy, xw.scr);
+  if (!USE_ARGB) {
+	  xw.vis = XDefaultVisual(xw.dpy, xw.scr);
+  } else {
+    XVisualInfo* vis;
+    XRenderPictFormat *fmt;
+    int nvi;
+    int i;
+
+    XVisualInfo tpl = {
+      .screen = xw.scr,
+      .depth = 32,
+      .class = TrueColor
+    };
+
+    vis = XGetVisualInfo(
+        xw.dpy,
+        VisualScreenMask |
+            VisualDepthMask |
+            VisualClassMask,
+        &tpl,
+        &nvi);
+
+    xw.vis = NULL;
+
+    for (i = 0; i < nvi; ++ i) {
+      fmt = XRenderFindVisualFormat(xw.dpy, vis[i].visual);
+      if (fmt -> type == PictTypeDirect && fmt->direct.alphaMask) {
+        xw.vis = vis[i].visual;
+        break;
+      }
+    }
+
+    XFree(vis);
+
+    if (!xw.vis) {
+      fprintf(stderr, "Couldn't find ARGB visual.\n");
+      exit(1);
+    }
+  }
 
 	/* font */
 	if (!FcInit())
@@ -892,7 +941,15 @@ xinit(void)
 	xloadfonts(usedfont, 0);
 
 	/* colors */
-	xw.cmap = XDefaultColormap(xw.dpy, xw.scr);
+  if (!USE_ARGB) {
+	  xw.cmap = XDefaultColormap(xw.dpy, xw.scr);
+  } else {
+    xw.cmap = XCreateColormap(
+        xw.dpy,
+        XRootWindow(xw.dpy, xw.scr),
+        xw.vis,
+        None);
+  }
 	xloadcols();
 
 	/* adjust fixed window geometry */
@@ -914,17 +971,35 @@ xinit(void)
 
 	if (!(opt_embed && (parent = strtol(opt_embed, NULL, 0))))
 		parent = XRootWindow(xw.dpy, xw.scr);
-	xw.win = XCreateWindow(xw.dpy, parent, xw.l, xw.t,
-			win.w, win.h, 0, XDefaultDepth(xw.dpy, xw.scr), InputOutput,
-			xw.vis, CWBackPixel | CWBorderPixel | CWBitGravity
-			| CWEventMask | CWColormap, &xw.attrs);
+	xw.win = XCreateWindow(
+      xw.dpy,
+      parent,
+      xw.l,
+      xw.t,
+			win.w,
+      win.h,
+      0,
+      xw.depth,
+      InputOutput,
+			xw.vis,
+      CWBackPixel       |
+          CWBorderPixel |
+          CWBitGravity  |
+          CWEventMask   |
+          CWColormap,
+      &xw.attrs);
 
 	memset(&gcvalues, 0, sizeof(gcvalues));
 	gcvalues.graphics_exposures = False;
-	dc.gc = XCreateGC(xw.dpy, parent, GCGraphicsExposures,
-			&gcvalues);
-	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h,
-			DefaultDepth(xw.dpy, xw.scr));
+
+  xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h, xw.depth);
+	dc.gc =
+      XCreateGC(
+          xw.dpy,
+          (USE_ARGB) ? xw.buf : parent,
+          GCGraphicsExposures,
+          &gcvalues);
+
 	XSetForeground(xw.dpy, dc.gc, dc.col[defaultbg].pixel);
 	XFillRectangle(xw.dpy, xw.buf, dc.gc, 0, 0, win.w, win.h);
 
@@ -1473,10 +1548,10 @@ xsettitle(char *p)
 }
 
 static XRenderColor crosshairs = {
-  .alpha = 0x0,
+  .alpha = 0x8000,
   .red = 0x8000,
-  .blue = 0x5000,
-  .green = 0x5000
+  .blue = 0x2000,
+  .green = 0x2000
 };
 static Color* truecrosshairs = NULL;
 
@@ -1494,6 +1569,8 @@ draw(void)
     if (!truecrosshairs) {
       truecrosshairs = malloc(sizeof(Color));
       XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &crosshairs, truecrosshairs);
+      truecrosshairs->pixel |= (0x80 << 24);
+      printf("Color: #%08x\n", truecrosshairs->pixel);
     }
 
     XftDrawRect( /* North */
