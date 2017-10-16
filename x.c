@@ -626,7 +626,7 @@ xloadcols(void)
 		}
 
   if (USE_ARGB) {
-    int alpha = 0x80;
+    int alpha = 0xe0;
     dc.col[defaultbg].color.alpha = (0xffff * alpha) / 0xff;
     dc.col[defaultbg].pixel &= 0x00111111;
     dc.col[defaultbg].pixel |= alpha << 24;
@@ -1548,10 +1548,10 @@ xsettitle(char *p)
 }
 
 static XRenderColor crosshairs = {
-  .alpha = 0x8000,
+  .alpha = 0xffff,
   .red = 0x8000,
-  .blue = 0x2000,
-  .green = 0x2000
+  .green = 0x3000,
+  .blue = 0x0500
 };
 static Color* truecrosshairs = NULL;
 
@@ -1576,7 +1576,7 @@ draw(void)
     XftDrawRect( /* North */
         xw.wdraw,
         truecrosshairs,
-        term.c.x * win.cw + cursorthickness + (win.cw / 2),
+        term.c.x * win.cw + cursorthickness,
         0,
         1,
         (term.c.y - 1) * win.ch);
@@ -1584,7 +1584,7 @@ draw(void)
     XftDrawRect( /* South */
         xw.wdraw,
         truecrosshairs,
-        term.c.x * win.cw + cursorthickness + (win.cw / 2),
+        term.c.x * win.cw + cursorthickness,
         (term.c.y + 2) * win.ch,
         1,
         (term.row - term.c.y) * win.ch);
@@ -1592,18 +1592,18 @@ draw(void)
     XftDrawRect( /* East. */
         xw.wdraw,
         truecrosshairs,
-        (term.c.x + 2) * win.cw + cursorthickness,
-        term.c.y * win.ch + cursorthickness + (win.ch / 2),
+        (term.c.x + 3) * win.cw + cursorthickness,
+        term.c.y * win.ch + cursorthickness + win.ch,
         (term.col - term.c.x + 2) * win.cw,
         1);
 
-    // XftDrawRect( /* West. */
-    //     xw.wdraw,
-    //     truecrosshairs,
-    //     0,
-    //     term.c.y * win.ch + cursorthickness + (win.ch / 2),
-    //     (term.c.x - 1) * win.cw,
-    //     1);
+    XftDrawRect( /* West. */
+        xw.wdraw,
+        truecrosshairs,
+        0,
+        term.c.y * win.ch + cursorthickness + win.ch,
+        (term.c.x - 2) * win.cw,
+        1);
   }
 
 	XSetForeground(xw.dpy, dc.gc,
