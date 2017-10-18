@@ -35,10 +35,10 @@ enum glyph_attribute {
 	ATTR_WDUMMY     = 1 << 10,
 	ATTR_BOLD_FAINT = ATTR_BOLD | ATTR_FAINT,
 
-        /* Custom attributes */
-        ATTR_UNDERCURL  = 1 << 11,
-        ATTR_OVERLINE   = 1 << 12,
-        ATTR_VSTRIKE    = 1 << 13,
+	/* Custom attributes */
+	ATTR_UNDERCURL	= 1 << 11,
+	ATTR_OVERLINE	 = 1 << 12,
+	ATTR_VSTRIKE		= 1 << 13,
 };
 
 enum term_mode {
@@ -102,8 +102,8 @@ typedef struct {
 	ushort mode;      /* attribute flags */
 	uint32_t fg;      /* foreground  */
 	uint32_t bg;      /* background  */
-  /* Custom special color for underline and undercurl. */
-  uint32_t sp;      /* special */
+	/* Custom special color for underline and undercurl. */
+	uint32_t sp;      /* special */
 } Glyph;
 
 typedef Glyph *Line;

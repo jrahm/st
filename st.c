@@ -1021,16 +1021,16 @@ treset(void)
 	uint i;
 
 	term.c = (TCursor){
-    .attr = {
-		  .mode = ATTR_NULL,
-		  .fg = defaultfg,
-		  .bg = defaultbg,
-		  .sp = -1,
-	  },
-    .x = 0,
-    .y = 0,
-    .state = CURSOR_DEFAULT
-  };
+		.attr = {
+			.mode = ATTR_NULL,
+			.fg = defaultfg,
+			.bg = defaultbg,
+			.sp = -1,
+		},
+		.x = 0,
+		.y = 0,
+		.state = CURSOR_DEFAULT
+	};
 
 	memset(term.tabs, 0, term.col * sizeof(*term.tabs));
 	for (i = tabspaces; i < term.col; i += tabspaces)
@@ -1053,14 +1053,14 @@ void
 tnew(int col, int row)
 {
 	term = (Term){
-    .c = {
-      .attr = {
-        .fg = defaultfg,
-        .bg = defaultbg,
-        .sp = -1
-      }
-    }
-  };
+		.c = {
+			.attr = {
+				.fg = defaultfg,
+				.bg = defaultbg,
+				.sp = -1
+			}
+		}
+	};
 
 	tresize(col, row);
 	term.numlock = 1;
@@ -1472,34 +1472,34 @@ tsetattr(int *attr, int l)
 			break;
 
 		/* Custom features. */
-    case 53:
-      term.c.attr.mode |= ATTR_OVERLINE;
-      break;
-    case 55:
-      term.c.attr.mode &= ~ATTR_OVERLINE;
-      break;
-    case 81:
-      term.c.attr.mode |= ATTR_UNDERCURL;
-      break;
-    case 82:
-      term.c.attr.mode &= ~ATTR_UNDERCURL;
-      break;
-    case 83:
-      term.c.attr.mode |= ATTR_VSTRIKE;
-      break;
-    case 84:
-      term.c.attr.mode &= ~ATTR_VSTRIKE;
-      break;
+		case 53:
+			term.c.attr.mode |= ATTR_OVERLINE;
+			break;
+		case 55:
+			term.c.attr.mode &= ~ATTR_OVERLINE;
+			break;
+		case 81:
+			term.c.attr.mode |= ATTR_UNDERCURL;
+			break;
+		case 82:
+			term.c.attr.mode &= ~ATTR_UNDERCURL;
+			break;
+		case 83:
+			term.c.attr.mode |= ATTR_VSTRIKE;
+			break;
+		case 84:
+			term.c.attr.mode &= ~ATTR_VSTRIKE;
+			break;
 		case 88:
 			/* Set the "special" color */
-      if ((idx = tdefcolor(attr, &i, l)) >= 0) {
-         term.c.attr.sp = idx;
-      }
-      break;
-    case 89:
+			if ((idx = tdefcolor(attr, &i, l)) >= 0) {
+				 term.c.attr.sp = idx;
+			}
+			break;
+		case 89:
 			/* Unset the "special" color */
-      term.c.attr.sp = -1;
-      break;
+			term.c.attr.sp = -1;
+			break;
 
 		default:
 			if (BETWEEN(attr[i], 30, 37)) {
