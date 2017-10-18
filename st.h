@@ -133,6 +133,9 @@ typedef struct {
 	int icharset; /* selected charset for sequence */
 	int numlock; /* lock numbers in keyboard */
 	int *tabs;
+
+	int chx; /* crosshair coordinates */
+	int chy;
 } Term;
 
 /* Purely graphic info */

@@ -1583,44 +1583,47 @@ draw(void)
 
 	/* Drow crosshairs for the cursor. */
 	if (!IS_SET(MODE_HIDE)) {
-		if (!truecrosshairs) {
-			truecrosshairs = malloc(sizeof(Color));
-			XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &crosshairs, truecrosshairs);
-			truecrosshairs->pixel |= (0x80 << 24);
-		}
-
-		XftDrawRect( /* North */
-			xw.odraw,
-			truecrosshairs,
-			term.c.x * win.cw + cursorthickness,
-			0,
-			1,
-			(term.c.y - 1) * win.ch);
-
-		XftDrawRect( /* South */
-			xw.odraw,
-			truecrosshairs,
-			term.c.x * win.cw + cursorthickness,
-			(term.c.y + 2) * win.ch,
-			1,
-			(term.row - term.c.y) * win.ch);
-
-		XftDrawRect( /* East. */
-			xw.odraw,
-			truecrosshairs,
-			(term.c.x + 3) * win.cw + cursorthickness,
-			term.c.y * win.ch + cursorthickness + win.ch,
-			(term.col - term.c.x + 2) * win.cw,
-			1);
-
-		XftDrawRect( /* West. */
-			xw.odraw,
-			truecrosshairs,
-			0,
-			term.c.y * win.ch + cursorthickness + win.ch,
-			(term.c.x - 2) * win.cw,
-			1);
+		term.chy = term.c.y;
+		term.chx = term.c.x;
 	}
+
+	if (!truecrosshairs) {
+		truecrosshairs = malloc(sizeof(Color));
+		XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &crosshairs, truecrosshairs);
+		truecrosshairs->pixel |= (0x80 << 24);
+	}
+
+	XftDrawRect( /* North */
+		xw.odraw,
+		truecrosshairs,
+		term.chx * win.cw + cursorthickness,
+		0,
+		1,
+		(term.chy - 1) * win.ch);
+
+	XftDrawRect( /* South */
+		xw.odraw,
+		truecrosshairs,
+		term.chx * win.cw + cursorthickness,
+		(term.chy + 2) * win.ch,
+		1,
+		(term.row - term.chy) * win.ch);
+
+	XftDrawRect( /* East. */
+		xw.odraw,
+		truecrosshairs,
+		(term.chx + 3) * win.cw + cursorthickness,
+		term.chy * win.ch + cursorthickness + win.ch,
+		(term.col - term.chx + 2) * win.cw,
+		1);
+
+	XftDrawRect( /* West. */
+		xw.odraw,
+		truecrosshairs,
+		0,
+		term.chy * win.ch + cursorthickness + win.ch,
+		(term.chx - 2) * win.cw,
+		1);
 
 	XCopyArea(xw.dpy, xw.overlay, xw.win, dc.ogc, 0, 0, win.w,
 			win.h, 0, 0);
