@@ -45,11 +45,12 @@ typedef struct {
 	Colormap cmap;
 	Window win;
 	Drawable buf;
+	Drawable overlay;
 	Atom xembed, wmdeletewin, netwmname, netwmpid;
 	XIM xim;
 	XIC xic;
 	Draw draw;
-	Draw wdraw;
+	Draw odraw;
 	Visual *vis;
 	XSetWindowAttributes attrs;
 	int scr;
@@ -84,6 +85,7 @@ typedef struct {
 	size_t collen;
 	Font font, bfont, ifont, ibfont;
 	GC gc;
+	GC ogc;
 } DC;
 
 static inline ushort sixd_to_16bit(int);
@@ -568,7 +570,12 @@ xresize(int col, int row)
 
 	XFreePixmap(xw.dpy, xw.buf);
 	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h, xw.depth);
+
+	XFreePixmap(xw.dpy, xw.overlay);
+	xw.overlay = XCreatePixmap(xw.dpy, xw.win, win.w, win.h, xw.depth);
+
 	XftDrawChange(xw.draw, xw.buf);
+	XftDrawChange(xw.odraw, xw.overlay);
 	xclear(0, 0, win.w, win.h);
 }
 
@@ -993,6 +1000,8 @@ xinit(void)
 	gcvalues.graphics_exposures = False;
 
 	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h, xw.depth);
+	xw.overlay = XCreatePixmap(xw.dpy, xw.win, win.w, win.h, xw.depth);
+
 	dc.gc =
 			XCreateGC(
 					xw.dpy,
@@ -1000,14 +1009,24 @@ xinit(void)
 					GCGraphicsExposures,
 					&gcvalues);
 
+	dc.ogc =
+			XCreateGC(
+					xw.dpy,
+					(USE_ARGB) ? xw.overlay : parent,
+					GCGraphicsExposures,
+					&gcvalues);
+
 	XSetForeground(xw.dpy, dc.gc, dc.col[defaultbg].pixel);
 	XFillRectangle(xw.dpy, xw.buf, dc.gc, 0, 0, win.w, win.h);
+
+	XSetForeground(xw.dpy, dc.ogc, dc.col[defaultbg].pixel);
+	XFillRectangle(xw.dpy, xw.buf, dc.ogc, 0, 0, win.w, win.h);
 
 	/* Xft rendering context */
 	xw.draw = XftDrawCreate(xw.dpy, xw.buf, xw.vis, xw.cmap);
 
 	/* Xft rendering context for the window itself */
-	xw.wdraw = XftDrawCreate(xw.dpy, xw.win, xw.vis, xw.cmap);
+	xw.odraw = XftDrawCreate(xw.dpy, xw.overlay, xw.vis, xw.cmap);
 
 	/* input methods */
 	if ((xw.xim = XOpenIM(xw.dpy, NULL, NULL, NULL)) == NULL) {
@@ -1559,7 +1578,7 @@ void
 draw(void)
 {
 	drawregion(0, 0, term.col, term.row);
-	XCopyArea(xw.dpy, xw.buf, xw.win, dc.gc, 0, 0, win.w,
+	XCopyArea(xw.dpy, xw.buf, xw.overlay, dc.gc, 0, 0, win.w,
 			win.h, 0, 0);
 
 	/* Drow crosshairs for the cursor. */
@@ -1568,11 +1587,10 @@ draw(void)
 			truecrosshairs = malloc(sizeof(Color));
 			XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &crosshairs, truecrosshairs);
 			truecrosshairs->pixel |= (0x80 << 24);
-			printf("Color: #%08x\n", truecrosshairs->pixel);
 		}
 
 		XftDrawRect( /* North */
-			xw.wdraw,
+			xw.odraw,
 			truecrosshairs,
 			term.c.x * win.cw + cursorthickness,
 			0,
@@ -1580,7 +1598,7 @@ draw(void)
 			(term.c.y - 1) * win.ch);
 
 		XftDrawRect( /* South */
-			xw.wdraw,
+			xw.odraw,
 			truecrosshairs,
 			term.c.x * win.cw + cursorthickness,
 			(term.c.y + 2) * win.ch,
@@ -1588,7 +1606,7 @@ draw(void)
 			(term.row - term.c.y) * win.ch);
 
 		XftDrawRect( /* East. */
-			xw.wdraw,
+			xw.odraw,
 			truecrosshairs,
 			(term.c.x + 3) * win.cw + cursorthickness,
 			term.c.y * win.ch + cursorthickness + win.ch,
@@ -1596,7 +1614,7 @@ draw(void)
 			1);
 
 		XftDrawRect( /* West. */
-			xw.wdraw,
+			xw.odraw,
 			truecrosshairs,
 			0,
 			term.c.y * win.ch + cursorthickness + win.ch,
@@ -1604,7 +1622,14 @@ draw(void)
 			1);
 	}
 
+	XCopyArea(xw.dpy, xw.overlay, xw.win, dc.ogc, 0, 0, win.w,
+			win.h, 0, 0);
+
 	XSetForeground(xw.dpy, dc.gc,
+			dc.col[IS_SET(MODE_REVERSE)?
+				defaultfg : defaultbg].pixel);
+
+	XSetForeground(xw.dpy, dc.ogc,
 			dc.col[IS_SET(MODE_REVERSE)?
 				defaultfg : defaultbg].pixel);
 }
