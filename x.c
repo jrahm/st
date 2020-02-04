@@ -1758,7 +1758,10 @@ kpress(XEvent *ev)
 {
 	XKeyEvent *e = &ev->xkey;
 	KeySym ksym;
-	char buf[32], *customkey;
+
+	char buf[64], *customkey;
+  char* chr = buf + 32; // reserve the first char for an esacpe char.
+
 	int len;
 	Rune c;
 	Status status;
@@ -1767,7 +1770,7 @@ kpress(XEvent *ev)
 	if (IS_SET(MODE_KBDLOCK))
 		return;
 
-	len = XmbLookupString(xw.xic, e, buf, sizeof buf, &ksym, &status);
+	len = XmbLookupString(xw.xic, e, chr, sizeof buf - 1, &ksym, &status);
 	/* 1. shortcuts */
 	for (bp = shortcuts; bp < shortcuts + shortcutslen; bp++) {
 		if (ksym == bp->keysym && match(bp->mod, e->state)) {
@@ -1785,19 +1788,37 @@ kpress(XEvent *ev)
 	/* 3. composed string from input method */
 	if (len == 0)
 		return;
-	if (len == 1 && e->state & Mod1Mask) {
+	if (e->state & Mod1Mask) {
 		if (IS_SET(MODE_8BIT)) {
-			if (*buf < 0177) {
-				c = *buf | 0x80;
-				len = utf8encode(c, buf);
+			if (*chr < 0177) {
+				c = *chr | 0x80;
+				len = utf8encode(c, chr);
 			}
 		} else {
-			buf[1] = buf[0];
-			buf[0] = '\033';
-			len = 2;
+			*(--chr) = '\033'; // Prepend escape character.
+      len ++;
 		}
-	}
-	ttysend(buf, len);
+	} else if (e->state & Mod2Mask) {
+    chr -= 3;
+    chr[0] = '\033';
+    chr[1] = '[';
+    chr[2] = '2';
+    len += 3;
+  } else if (e->state & Mod3Mask) {
+    chr -= 3;
+    chr[0] = '\033';
+    chr[1] = '[';
+    chr[2] = '3';
+    len += 3;
+  } else if (e->state & Mod4Mask) {
+    chr -= 3;
+    chr[0] = '\033';
+    chr[1] = '[';
+    chr[2] = '4';
+    len += 3;
+  }
+
+	ttysend(chr, len);
 }
 
 
