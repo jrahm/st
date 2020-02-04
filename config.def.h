@@ -118,8 +118,8 @@ const char *colorname[] = {
  */
 unsigned int defaultfg = 7;
 unsigned int defaultbg = 0;
-unsigned int defaultcs = 256;
-unsigned int defaultrcs = 257;
+unsigned int defaultcs = 1;
+unsigned int defaultrcs = 3;
 
 /*
  * Default shape of cursor
@@ -141,7 +141,7 @@ unsigned int rows = 24;
  * Default colour and shape of the mouse cursor
  */
 unsigned int mouseshape = XC_xterm;
-unsigned int mousefg = 7;
+unsigned int mousefg = 1;
 unsigned int mousebg = 0;
 
 /*
@@ -162,7 +162,7 @@ MouseShortcut mshortcuts[] = {
 
 /* Internal keyboard shortcuts. */
 #define MODKEY Mod1Mask
-#define TERMMOD (ControlMask|ShiftMask)
+#define TERMMOD (Mod1Mask|ShiftMask)
 
 Shortcut shortcuts[] = {
 	/* mask                 keysym          function        argument */
@@ -170,14 +170,18 @@ Shortcut shortcuts[] = {
 	{ ControlMask,          XK_Print,       toggleprinter,  {.i =  0} },
 	{ ShiftMask,            XK_Print,       printscreen,    {.i =  0} },
 	{ XK_ANY_MOD,           XK_Print,       printsel,       {.i =  0} },
-	{ TERMMOD,              XK_Prior,       zoom,           {.f = +1} },
-	{ TERMMOD,              XK_Next,        zoom,           {.f = -1} },
+	{ TERMMOD,              XK_plus,        zoom,           {.f = +1} },
+	{ TERMMOD,              XK_underscore,  zoom,           {.f = -1} },
 	{ TERMMOD,              XK_Home,        zoomreset,      {.f =  0} },
 	{ TERMMOD,              XK_C,           clipcopy,       {.i =  0} },
 	{ TERMMOD,              XK_V,           clippaste,      {.i =  0} },
 	{ TERMMOD,              XK_Y,           selpaste,       {.i =  0} },
 	{ TERMMOD,              XK_Num_Lock,    numlock,        {.i =  0} },
 	{ TERMMOD,              XK_I,           iso14755,       {.i =  0} },
+	{ TERMMOD,              XK_Right,       squishtexth,    {.f =  1} },
+	{ TERMMOD,              XK_Left,        squishtexth,    {.f = -1} },
+	{ TERMMOD,              XK_Up,          squishtextv,    {.f =  1} },
+	{ TERMMOD,              XK_Down,        squishtextv,    {.f = -1} },
 };
 
 /*
