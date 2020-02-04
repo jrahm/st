@@ -1020,11 +1020,17 @@ treset(void)
 {
 	uint i;
 
-	term.c = (TCursor){{
-		.mode = ATTR_NULL,
-		.fg = defaultfg,
-		.bg = defaultbg
-	}, .x = 0, .y = 0, .state = CURSOR_DEFAULT};
+	term.c = (TCursor){
+		.attr = {
+			.mode = ATTR_NULL,
+			.fg = defaultfg,
+			.bg = defaultbg,
+			.sp = -1,
+		},
+		.x = 0,
+		.y = 0,
+		.state = CURSOR_DEFAULT
+	};
 
 	memset(term.tabs, 0, term.col * sizeof(*term.tabs));
 	for (i = tabspaces; i < term.col; i += tabspaces)
@@ -1046,7 +1052,16 @@ treset(void)
 void
 tnew(int col, int row)
 {
-	term = (Term){ .c = { .attr = { .fg = defaultfg, .bg = defaultbg } } };
+	term = (Term){
+		.c = {
+			.attr = {
+				.fg = defaultfg,
+				.bg = defaultbg,
+				.sp = -1
+			}
+		}
+	};
+
 	tresize(col, row);
 	term.numlock = 1;
 
@@ -1261,6 +1276,7 @@ tclearregion(int x1, int y1, int x2, int y2)
 				selclear();
 			gp->fg = term.c.attr.fg;
 			gp->bg = term.c.attr.bg;
+			gp->sp = term.c.attr.sp;
 			gp->mode = 0;
 			gp->u = ' ';
 		}
@@ -1456,34 +1472,34 @@ tsetattr(int *attr, int l)
 			break;
 
 		/* Custom features. */
-    case 53:
-      term.c.attr.mode |= ATTR_OVERLINE;
-      break;
-    case 55:
-      term.c.attr.mode &= ~ATTR_OVERLINE;
-      break;
-    case 81:
-      term.c.attr.mode |= ATTR_UNDERCURL;
-      break;
-    case 82:
-      term.c.attr.mode &= ~ATTR_UNDERCURL;
-      break;
-    case 83:
-      term.c.attr.mode |= ATTR_VSTRIKE;
-      break;
-    case 84:
-      term.c.attr.mode &= ~ATTR_VSTRIKE;
-      break;
+		case 53:
+			term.c.attr.mode |= ATTR_OVERLINE;
+			break;
+		case 55:
+			term.c.attr.mode &= ~ATTR_OVERLINE;
+			break;
+		case 81:
+			term.c.attr.mode |= ATTR_UNDERCURL;
+			break;
+		case 82:
+			term.c.attr.mode &= ~ATTR_UNDERCURL;
+			break;
+		case 83:
+			term.c.attr.mode |= ATTR_VSTRIKE;
+			break;
+		case 84:
+			term.c.attr.mode &= ~ATTR_VSTRIKE;
+			break;
 		case 88:
 			/* Set the "special" color */
-      if ((idx = tdefcolor(attr, &i, l)) >= 0) {
-         term.c.attr.sp = idx;
-      }
-      break;
-    case 89:
+			if ((idx = tdefcolor(attr, &i, l)) >= 0) {
+				 term.c.attr.sp = idx;
+			}
+			break;
+		case 89:
 			/* Unset the "special" color */
-      term.c.attr.sp = -1;
-      break;
+			term.c.attr.sp = -1;
+			break;
 
 		default:
 			if (BETWEEN(attr[i], 30, 37)) {

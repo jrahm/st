@@ -1,5 +1,7 @@
 /* See LICENSE for license details. */
 
+#define USE_ARGB 1
+
 #include <math.h>
 #include <errno.h>
 #include <locale.h>
@@ -43,14 +45,17 @@ typedef struct {
 	Colormap cmap;
 	Window win;
 	Drawable buf;
+	Drawable overlay;
 	Atom xembed, wmdeletewin, netwmname, netwmpid;
 	XIM xim;
 	XIC xic;
 	Draw draw;
+	Draw odraw;
 	Visual *vis;
 	XSetWindowAttributes attrs;
 	int scr;
 	int isfixed; /* is fixed geometry? */
+	int depth; /* bit depth */
 	int l, t; /* left and top offset */
 	int gm; /* geometry mask */
 } XWindow;
@@ -80,6 +85,7 @@ typedef struct {
 	size_t collen;
 	Font font, bfont, ifont, ibfont;
 	GC gc;
+	GC ogc;
 } DC;
 
 static inline ushort sixd_to_16bit(int);
@@ -563,9 +569,13 @@ xresize(int col, int row)
 	win.th = MAX(1, row * win.ch);
 
 	XFreePixmap(xw.dpy, xw.buf);
-	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h,
-			DefaultDepth(xw.dpy, xw.scr));
+	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h, xw.depth);
+
+	XFreePixmap(xw.dpy, xw.overlay);
+	xw.overlay = XCreatePixmap(xw.dpy, xw.win, win.w, win.h, xw.depth);
+
 	XftDrawChange(xw.draw, xw.buf);
+	XftDrawChange(xw.odraw, xw.overlay);
 	xclear(0, 0, win.w, win.h);
 }
 
@@ -621,6 +631,13 @@ xloadcols(void)
 			else
 				die("Could not allocate color %d\n", i);
 		}
+
+	if (USE_ARGB) {
+		int alpha = 0xe0;
+		dc.col[defaultbg].color.alpha = (0xffff * alpha) / 0xff;
+		dc.col[defaultbg].pixel &= 0x00111111;
+		dc.col[defaultbg].pixel |= alpha << 24;
+	}
 	loaded = 1;
 }
 
@@ -881,7 +898,47 @@ xinit(void)
 	if (!(xw.dpy = XOpenDisplay(NULL)))
 		die("Can't open display\n");
 	xw.scr = XDefaultScreen(xw.dpy);
-	xw.vis = XDefaultVisual(xw.dpy, xw.scr);
+
+	xw.depth = (USE_ARGB) ? 32 : XDefaultDepth(xw.dpy, xw.scr);
+	if (!USE_ARGB) {
+		xw.vis = XDefaultVisual(xw.dpy, xw.scr);
+	} else {
+		XVisualInfo* vis;
+		XRenderPictFormat *fmt;
+		int nvi;
+		int i;
+
+		XVisualInfo tpl = {
+			.screen = xw.scr,
+			.depth = 32,
+			.class = TrueColor
+		};
+
+		vis = XGetVisualInfo(
+				xw.dpy,
+				VisualScreenMask |
+						VisualDepthMask |
+						VisualClassMask,
+				&tpl,
+				&nvi);
+
+		xw.vis = NULL;
+
+		for (i = 0; i < nvi; ++ i) {
+			fmt = XRenderFindVisualFormat(xw.dpy, vis[i].visual);
+			if (fmt -> type == PictTypeDirect && fmt->direct.alphaMask) {
+				xw.vis = vis[i].visual;
+				break;
+			}
+		}
+
+		XFree(vis);
+
+		if (!xw.vis) {
+			fprintf(stderr, "Couldn't find ARGB visual.\n");
+			exit(1);
+		}
+	}
 
 	/* font */
 	if (!FcInit())
@@ -891,7 +948,15 @@ xinit(void)
 	xloadfonts(usedfont, 0);
 
 	/* colors */
-	xw.cmap = XDefaultColormap(xw.dpy, xw.scr);
+	if (!USE_ARGB) {
+		xw.cmap = XDefaultColormap(xw.dpy, xw.scr);
+	} else {
+		xw.cmap = XCreateColormap(
+				xw.dpy,
+				XRootWindow(xw.dpy, xw.scr),
+				xw.vis,
+				None);
+	}
 	xloadcols();
 
 	/* adjust fixed window geometry */
@@ -913,22 +978,55 @@ xinit(void)
 
 	if (!(opt_embed && (parent = strtol(opt_embed, NULL, 0))))
 		parent = XRootWindow(xw.dpy, xw.scr);
-	xw.win = XCreateWindow(xw.dpy, parent, xw.l, xw.t,
-			win.w, win.h, 0, XDefaultDepth(xw.dpy, xw.scr), InputOutput,
-			xw.vis, CWBackPixel | CWBorderPixel | CWBitGravity
-			| CWEventMask | CWColormap, &xw.attrs);
+	xw.win = XCreateWindow(
+			xw.dpy,
+			parent,
+			xw.l,
+			xw.t,
+			win.w,
+			win.h,
+			0,
+			xw.depth,
+			InputOutput,
+			xw.vis,
+			CWBackPixel			 |
+					CWBorderPixel |
+					CWBitGravity	|
+					CWEventMask	 |
+					CWColormap,
+			&xw.attrs);
 
 	memset(&gcvalues, 0, sizeof(gcvalues));
 	gcvalues.graphics_exposures = False;
-	dc.gc = XCreateGC(xw.dpy, parent, GCGraphicsExposures,
-			&gcvalues);
-	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h,
-			DefaultDepth(xw.dpy, xw.scr));
+
+	xw.buf = XCreatePixmap(xw.dpy, xw.win, win.w, win.h, xw.depth);
+	xw.overlay = XCreatePixmap(xw.dpy, xw.win, win.w, win.h, xw.depth);
+
+	dc.gc =
+			XCreateGC(
+					xw.dpy,
+					(USE_ARGB) ? xw.buf : parent,
+					GCGraphicsExposures,
+					&gcvalues);
+
+	dc.ogc =
+			XCreateGC(
+					xw.dpy,
+					(USE_ARGB) ? xw.overlay : parent,
+					GCGraphicsExposures,
+					&gcvalues);
+
 	XSetForeground(xw.dpy, dc.gc, dc.col[defaultbg].pixel);
 	XFillRectangle(xw.dpy, xw.buf, dc.gc, 0, 0, win.w, win.h);
 
+	XSetForeground(xw.dpy, dc.ogc, dc.col[defaultbg].pixel);
+	XFillRectangle(xw.dpy, xw.buf, dc.ogc, 0, 0, win.w, win.h);
+
 	/* Xft rendering context */
 	xw.draw = XftDrawCreate(xw.dpy, xw.buf, xw.vis, xw.cmap);
+
+	/* Xft rendering context for the window itself */
+	xw.odraw = XftDrawCreate(xw.dpy, xw.overlay, xw.vis, xw.cmap);
 
 	/* input methods */
 	if ((xw.xim = XOpenIM(xw.dpy, NULL, NULL, NULL)) == NULL) {
@@ -1123,8 +1221,8 @@ xmakeglyphfontspecs(XftGlyphFontSpec *specs, const Glyph *glyphs, int len, int x
 void
 xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, int y)
 {
-  double w, dx, h;
-  int i, dy;
+	double w, dx, h;
+	int i, dy;
 	int charlen = len * ((base.mode & ATTR_WIDE) ? 2 : 1);
 	int winx = borderpx + x * win.cw, winy = borderpx + y * win.ch,
 	    width = charlen * win.cw;
@@ -1161,6 +1259,22 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
 		bg = &truebg;
 	} else {
 		bg = &dc.col[base.bg];
+	}
+
+	/* Set the special color. */
+	if (base.sp != -1) {
+		if (IS_TRUECOL(base.sp)) {
+			colsp.alpha = 0xffff;
+			colsp.green = TRUEGREEN(base.sp);
+			colsp.red = TRUERED(base.sp);
+			colsp.blue = TRUEBLUE(base.sp);
+			XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &colsp, &truesp);
+			sp = &truesp;
+		} else {
+			sp = &dc.col[base.sp];
+		}
+	} else {
+		sp = fg;
 	}
 
 	/* Change basic system colors [0-7] to bright system colors [8-15] */
@@ -1242,82 +1356,66 @@ xdrawglyphfontspecs(const XftGlyphFontSpec *specs, Glyph base, int len, int x, i
 
 	/* Render underline and strikethrough. */
 	if (base.mode & ATTR_UNDERLINE) {
-		XftDrawRect(xw.draw, fg, winx, winy + dc.font.ascent + 1,
+		XftDrawRect(xw.draw, sp, winx, winy + dc.font.ascent + 1,
 				width, 1);
 	}
 
 	if (base.mode & ATTR_STRUCK) {
-		XftDrawRect(xw.draw, fg, winx, winy + 2 * dc.font.ascent / 3,
+		XftDrawRect(xw.draw, sp, winx, winy + 2 * dc.font.ascent / 3,
 				width, 1);
 	}
 
-  /* Draw custom attributes. */
+	/* Draw custom attributes. */
 
-  /* Set the special color. */
-  if (base.sp != -1) {
-    if (IS_TRUECOL(base.sp)) {
-      colsp.alpha = 0xffff;
-      colsp.green = TRUEGREEN(base.sp);
-      colsp.red = TRUERED(base.sp);
-      colsp.blue = TRUEBLUE(base.sp);
-      XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &colsp, &truesp);
-      sp = &truesp;
-    } else {
-      sp = fg;
-    }
-  } else {
-    sp = fg;
-  }
+	/* Undercurl. */
+	if (base.mode & ATTR_UNDERCURL) {
+		for (i = 0; i < width; ++ i)	{
+			w = dc.font.width;
+			dx = ((double) ((i * 512) % (dc.font.width * 256))) / 256.0;
+			h = dc.font.descent / 2.0;
+			dy = round((1 - abs(w - 2 * dx) / w) * h);
 
-  /* Undercurl. */
-  if (base.mode & ATTR_UNDERCURL) {
-    for (i = 0; i < width; ++ i)  {
-      w = dc.font.width;
-      dx = ((double) ((i * 512) % (dc.font.width * 256))) / 256.0;
-      h = dc.font.descent / 2.0;
-      dy = round((1 - abs(w - 2 * dx) / w) * h);
+			XftDrawRect(
+					xw.draw,
+					sp,
+					winx + i,
+					winy + 1 + dc.font.ascent + dy,
+					1,
+					1);
 
-      XftDrawRect(
-          xw.draw,
-          sp,
-          winx + i,
-          winy + 1 + dc.font.ascent + dy,
-          1,
-          1);
+			XftDrawRect(
+					xw.draw,
+					sp,
+					winx + i,
+					winy + 1 + dc.font.ascent - 1 + dy,
+					1,
+					1);
+		}
+	}
 
-      XftDrawRect(
-          xw.draw,
-          sp,
-          winx + i,
-          winy + 1 + dc.font.ascent - 1 + dy,
-          1,
-          1);
-    }
-  }
+	/* Line above characters. */
+	if (base.mode & ATTR_OVERLINE) {
+		XftDrawRect(
+				xw.draw,
+				sp,
+				winx,
+				winy + dc.font.descent,
+				width,
+				1);
+	}
 
-  /* Line above characters. */
-  if (base.mode & ATTR_OVERLINE) {
-    XftDrawRect(
-        xw.draw,
-        sp,
-        winx,
-        winy + dc.font.descent,
-        width,
-        1);
-  }
-
-  /* Vertical strike over each character. */
-  if (base.mode & ATTR_VSTRIKE) {
-    for(i = dc.font.width / 2; i < width; i += dc.font.width) {
-      XftDrawRect(
-          xw.draw,
-          sp,
-          winx + i,
-          winy,
-          1,
-          dc.font.height);
-    }
-  }
+	/* Vertical strike over each character. */
+	if (base.mode & ATTR_VSTRIKE) {
+		for(i = dc.font.width / 2; i < width; i += dc.font.width) {
+			XftDrawRect(
+					xw.draw,
+					sp,
+					winx + i,
+					winy,
+					1,
+					dc.font.height);
+		}
+	}
 
 	/* Reset clip to none. */
 	XftDrawSetClip(xw.draw, 0);
@@ -1338,7 +1436,16 @@ xdrawcursor(void)
 {
 	static int oldx = 0, oldy = 0;
 	int curx;
-	Glyph g = {' ', ATTR_NULL, defaultbg, defaultcs}, og;
+	Glyph g = {
+		.u = ' ',
+		.mode = ATTR_NULL,
+		.fg = defaultbg,
+		.bg = defaultcs,
+		.sp = -1
+	};
+
+	Glyph og;
+
 	int ena_sel = sel.ob.x != -1 && sel.alt == IS_SET(MODE_ALTSCREEN);
 	Color drawcol;
 
@@ -1386,6 +1493,7 @@ xdrawcursor(void)
 		}
 	}
 
+	g.sp = g.fg;
 	if (IS_SET(MODE_HIDE))
 		return;
 
@@ -1458,13 +1566,73 @@ xsettitle(char *p)
 	XFree(prop.value);
 }
 
+static XRenderColor crosshairs = {
+	.alpha = 0xffff,
+	.red = 0xffff,
+	.green = 0x0000,
+	.blue = 0x0000
+};
+static Color* truecrosshairs = NULL;
+
 void
 draw(void)
 {
 	drawregion(0, 0, term.col, term.row);
-	XCopyArea(xw.dpy, xw.buf, xw.win, dc.gc, 0, 0, win.w,
+	XCopyArea(xw.dpy, xw.buf, xw.overlay, dc.gc, 0, 0, win.w,
 			win.h, 0, 0);
+
+	/* Drow crosshairs for the cursor. */
+	if (!IS_SET(MODE_HIDE)) {
+		term.chy = term.c.y;
+		term.chx = term.c.x;
+	}
+
+	if (!truecrosshairs) {
+		truecrosshairs = malloc(sizeof(Color));
+		XftColorAllocValue(xw.dpy, xw.vis, xw.cmap, &crosshairs, truecrosshairs);
+		truecrosshairs->pixel |= (0x80 << 24);
+	}
+
+	XftDrawRect( /* North */
+		xw.odraw,
+		truecrosshairs,
+		term.chx * win.cw + cursorthickness,
+		0,
+		1,
+		(term.chy - 1) * win.ch);
+
+	XftDrawRect( /* South */
+		xw.odraw,
+		truecrosshairs,
+		term.chx * win.cw + cursorthickness,
+		(term.chy + 2) * win.ch,
+		1,
+		(term.row - term.chy) * win.ch);
+
+	XftDrawRect( /* East. */
+		xw.odraw,
+		truecrosshairs,
+		(term.chx + 3) * win.cw + cursorthickness,
+		term.chy * win.ch + cursorthickness + win.ch,
+		(term.col - term.chx + 2) * win.cw,
+		1);
+
+	XftDrawRect( /* West. */
+		xw.odraw,
+		truecrosshairs,
+		0,
+		term.chy * win.ch + cursorthickness + win.ch,
+		(term.chx - 2) * win.cw,
+		1);
+
+	XCopyArea(xw.dpy, xw.overlay, xw.win, dc.ogc, 0, 0, win.w,
+			win.h, 0, 0);
+
 	XSetForeground(xw.dpy, dc.gc,
+			dc.col[IS_SET(MODE_REVERSE)?
+				defaultfg : defaultbg].pixel);
+
+	XSetForeground(xw.dpy, dc.ogc,
 			dc.col[IS_SET(MODE_REVERSE)?
 				defaultfg : defaultbg].pixel);
 }
@@ -1590,7 +1758,10 @@ kpress(XEvent *ev)
 {
 	XKeyEvent *e = &ev->xkey;
 	KeySym ksym;
-	char buf[32], *customkey;
+
+	char buf[64], *customkey;
+  char* chr = buf + 32; // reserve the first char for an esacpe char.
+
 	int len;
 	Rune c;
 	Status status;
@@ -1599,7 +1770,7 @@ kpress(XEvent *ev)
 	if (IS_SET(MODE_KBDLOCK))
 		return;
 
-	len = XmbLookupString(xw.xic, e, buf, sizeof buf, &ksym, &status);
+	len = XmbLookupString(xw.xic, e, chr, sizeof buf - 1, &ksym, &status);
 	/* 1. shortcuts */
 	for (bp = shortcuts; bp < shortcuts + shortcutslen; bp++) {
 		if (ksym == bp->keysym && match(bp->mod, e->state)) {
@@ -1617,19 +1788,37 @@ kpress(XEvent *ev)
 	/* 3. composed string from input method */
 	if (len == 0)
 		return;
-	if (len == 1 && e->state & Mod1Mask) {
+	if (e->state & Mod1Mask) {
 		if (IS_SET(MODE_8BIT)) {
-			if (*buf < 0177) {
-				c = *buf | 0x80;
-				len = utf8encode(c, buf);
+			if (*chr < 0177) {
+				c = *chr | 0x80;
+				len = utf8encode(c, chr);
 			}
 		} else {
-			buf[1] = buf[0];
-			buf[0] = '\033';
-			len = 2;
+			*(--chr) = '\033'; // Prepend escape character.
+      len ++;
 		}
-	}
-	ttysend(buf, len);
+	} else if (e->state & Mod2Mask) {
+    chr -= 3;
+    chr[0] = '\033';
+    chr[1] = '[';
+    chr[2] = '2';
+    len += 3;
+  } else if (e->state & Mod3Mask) {
+    chr -= 3;
+    chr[0] = '\033';
+    chr[1] = '[';
+    chr[2] = '3';
+    len += 3;
+  } else if (e->state & Mod4Mask) {
+    chr -= 3;
+    chr[0] = '\033';
+    chr[1] = '[';
+    chr[2] = '4';
+    len += 3;
+  }
+
+	ttysend(chr, len);
 }
 
 
@@ -1842,21 +2031,21 @@ run:
 }
 
 void xsquishtextv(float amt) {
-  chscale += amt / (float) dc.font.height;
-  xunloadfonts();
-  xloadfonts(usedfont, usedfontsize);
-  cresize(0, 0);
-  ttyresize();
-  redraw();
-  xhints();
+	chscale += amt / (float) dc.font.height;
+	xunloadfonts();
+	xloadfonts(usedfont, usedfontsize);
+	cresize(0, 0);
+	ttyresize();
+	redraw();
+	xhints();
 }
 
 void xsquishtexth(float amt) {
-  cwscale += amt / (float) dc.font.width;
-  xunloadfonts();
-  xloadfonts(usedfont, usedfontsize);
-  cresize(0, 0);
-  ttyresize();
-  redraw();
-  xhints();
+	cwscale += amt / (float) dc.font.width;
+	xunloadfonts();
+	xloadfonts(usedfont, usedfontsize);
+	cresize(0, 0);
+	ttyresize();
+	redraw();
+	xhints();
 }

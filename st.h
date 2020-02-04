@@ -11,7 +11,7 @@
 #define DIVCEIL(n, d)		(((n) + ((d) - 1)) / (d))
 #define LIMIT(x, a, b)		(x) = (x) < (a) ? (a) : (x) > (b) ? (b) : (x)
 #define ATTRCMP(a, b)		((a).mode != (b).mode || (a).fg != (b).fg || \
-				(a).bg != (b).bg)
+				(a).bg != (b).bg || (a).sp != (b).sp)
 #define IS_SET(flag)		((term.mode & (flag)) != 0)
 #define TIMEDIFF(t1, t2)	((t1.tv_sec-t2.tv_sec)*1000 + \
 				(t1.tv_nsec-t2.tv_nsec)/1E6)
@@ -35,10 +35,10 @@ enum glyph_attribute {
 	ATTR_WDUMMY     = 1 << 10,
 	ATTR_BOLD_FAINT = ATTR_BOLD | ATTR_FAINT,
 
-        /* Custom attributes */
-        ATTR_UNDERCURL  = 1 << 11,
-        ATTR_OVERLINE   = 1 << 12,
-        ATTR_VSTRIKE    = 1 << 13,
+	/* Custom attributes */
+	ATTR_UNDERCURL	= 1 << 11,
+	ATTR_OVERLINE	 = 1 << 12,
+	ATTR_VSTRIKE		= 1 << 13,
 };
 
 enum term_mode {
@@ -102,9 +102,8 @@ typedef struct {
 	ushort mode;      /* attribute flags */
 	uint32_t fg;      /* foreground  */
 	uint32_t bg;      /* background  */
-
-        /* Custom special color for underline and undercurl. */
-        uint32_t sp;      /* special */
+	/* Custom special color for underline and undercurl. */
+	uint32_t sp;      /* special */
 } Glyph;
 
 typedef Glyph *Line;
@@ -134,6 +133,9 @@ typedef struct {
 	int icharset; /* selected charset for sequence */
 	int numlock; /* lock numbers in keyboard */
 	int *tabs;
+
+	int chx; /* crosshair coordinates */
+	int chy;
 } Term;
 
 /* Purely graphic info */
