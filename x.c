@@ -1798,13 +1798,7 @@ kpress(XEvent *ev)
 			*(--chr) = '\033'; // Prepend escape character.
       len ++;
 		}
-	} else if (e->state & Mod2Mask) {
-    chr -= 3;
-    chr[0] = '\033';
-    chr[1] = '[';
-    chr[2] = '2';
-    len += 3;
-  } else if (e->state & Mod3Mask) {
+	} else if (e->state & Mod3Mask) {
     chr -= 3;
     chr[0] = '\033';
     chr[1] = '[';
